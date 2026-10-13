@@ -1,0 +1,15 @@
+model FlowReview {
+ id String @id @default(uuid())
+ flowId String
+ organizationId String
+ flow FlowRecord @relation(fields: [flowId, organizationId], references: [id, organizationId], onDelete: Restrict)
+ reviewerId String
+ reviewerEmail String
+ decision String
+ reason String @db.Text
+ revision Int
+ evidenceHash String
+ createdAt DateTime @default(now())
+ @@unique([flowId, revision])
+ @@index([organizationId, flowId])
+}

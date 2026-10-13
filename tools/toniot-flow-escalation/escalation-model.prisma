@@ -1,0 +1,19 @@
+model FlowEscalation {
+ id String @id @default(uuid())
+ organizationId String
+ flowId String
+ reviewId String
+ flow FlowRecord @relation(fields: [flowId, organizationId], references: [id, organizationId], onDelete: Restrict)
+ review FlowReview @relation(fields: [reviewId, flowId, organizationId], references: [id, flowId, organizationId], onDelete: Restrict)
+ kind String
+ threatId String?
+ threat ThreatEvent? @relation(fields: [threatId, organizationId], references: [id, organizationId], onDelete: Restrict)
+ incidentId String?
+ incident Incident? @relation(fields: [incidentId, organizationId], references: [id, organizationId], onDelete: Restrict)
+ creatorId String
+ creatorEmail String
+ reason String @db.Text
+ evidenceHash String
+ createdAt DateTime @default(now())
+ @@unique([organizationId, flowId])
+}

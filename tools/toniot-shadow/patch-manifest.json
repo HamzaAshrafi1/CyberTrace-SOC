@@ -1,0 +1,37 @@
+[
+  {
+    "path": "prisma/migrations/20261006160000_flow_shadow_analysis/migration.sql",
+    "previous_text_sha256": null,
+    "new_text_sha256": "54111c85112d141efc16a60b6d2e3b02a597816489aff35d89c7e9408f5eddc1"
+  },
+  {
+    "path": "python-service/app/services/flow_service.py",
+    "previous_text_sha256": "422c0b1d2f54d4c89daafa3dc652a83666a7a9c920bcc2eb4e1e31e15ca54451",
+    "new_text_sha256": "5d3b8d3b215e63671a3ec995fa711a809e0d077ab4f76ea563f441873416a6be"
+  },
+  {
+    "path": "python-service/app/services/ml_shadow.py",
+    "previous_text_sha256": null,
+    "new_text_sha256": "2a6eab68d42bd162fd59d92588c3bb9fd25dd2aa4d4dcaccac3217303f021695"
+  },
+  {
+    "path": "python-service/fixtures/shadow_demo.jsonl",
+    "previous_text_sha256": null,
+    "new_text_sha256": "cbe9aa632bd27d0559b70de03da873ffb6ebc9c50a4a3773d96356fbcb5fa861"
+  },
+  {
+    "path": "python-service/tests/test_ml_shadow.py",
+    "previous_text_sha256": null,
+    "new_text_sha256": "7f1f30becd043b7ba8b4a4ee314a14217f71b088f48ab2571438b4f00afa90e3"
+  },
+  {
+    "path": "python-service/tools/replay_zeek.py",
+    "previous_text_sha256": "1ad91491a97c8435aa399cfb64343d0ac9307bf19c86f484f7f588a2a244acd6",
+    "new_text_sha256": "64f612ff189725dde9c4c9f7cdfa75f27824c715657c8485eeb3616ac951923b"
+  },
+  {
+    "path": "src/app/(dashboard)/flows/page.tsx",
+    "previous_text_sha256": "d6581e70483f73bb98598e38014c3e3fee4785564dfbfba3744c8de53b531523",
+    "new_text_sha256": "c746472608b766e15bdb97c347afd4d3f147b8ff5594452f97ded3f7fe5c9253"
+  }
+]

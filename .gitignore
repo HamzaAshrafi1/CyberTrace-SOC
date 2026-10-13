@@ -1,0 +1,43 @@
+# Editor files
+.vs/
+**/.vs/
+.DS_Store
+
+# Dependencies and build outputs
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/__pycache__/
+*.py[cod]
+*.tsbuildinfo
+
+# Python environments
+**/.venv/
+**/venv/
+tools/*-venv/
+
+# Credentials and local configuration
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Raw datasets and model binaries
+/datasets/
+*.pcap
+*.pcapng
+*.joblib
+*.pkl
+
+# Installation backups
+tools/*-backups/
+**/package.before-upgrade.json
+**/package-lock.before-upgrade.json
+
+# Runtime outputs
+*.log
+**/chroma_db/
+**/.chroma/

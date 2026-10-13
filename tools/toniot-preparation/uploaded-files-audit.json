@@ -1,0 +1,60 @@
+{
+  "version": "toniot-audit-v1",
+  "feature_schema": "zeek-conn-v1",
+  "timestamp_join": "nearest_second_decimal_half_up",
+  "warning": "Join convention inferred from this sample; capture normal labels provisional. No split, training or verdict generated.",
+  "inputs": [
+    {
+      "capture_id": "normal_scanning6",
+      "filename": "conn(1).log",
+      "sha256": "0449bea5d4e2b438dd628417285809922b5ac6fadc14ad37853dc13d034326ad"
+    },
+    {
+      "capture_id": "normal_13",
+      "filename": "conn.log",
+      "sha256": "6ee9b02707ba0688cc60ba168a2e3bcfa615897a7a23500f95ef520ba9fd3437"
+    },
+    {
+      "filename": "GroundTruth_Network_7.csv",
+      "sha256": "9c099cfd1c39117a2f797cfd900b507c552221be3cb66a9497c34202c3759e88"
+    },
+    {
+      "filename": "GroundTruth_Network_8.csv",
+      "sha256": "826d9a99387418267249979788ee42d9aebeb7b3ca2675be89172f0d7d23f975"
+    }
+  ],
+  "ground_truth": {
+    "GroundTruth_Network_7.csv": {
+      "rows": 1000000,
+      "candidate_rows": 195832
+    },
+    "GroundTruth_Network_8.csv": {
+      "rows": 1000000,
+      "candidate_rows": 5584
+    }
+  },
+  "captures": {
+    "normal_scanning6": {
+      "rows": 202561,
+      "feature_valid": 52793,
+      "label_eligible": 201305,
+      "observed_label:scanning": 201530,
+      "quality:missing:duration": 149281,
+      "quality:reported_content_gap": 487,
+      "observed_label:None": 1031,
+      "label_flag:no_ground_truth_match": 1031,
+      "quality:zero_packets": 9,
+      "label_flag:multiple_flows_share_ground_truth_key": 225
+    },
+    "normal_13": {
+      "rows": 9529,
+      "feature_valid": 2451,
+      "label_eligible": 0,
+      "observed_label:normal": 9529,
+      "label_flag:provisional_capture_label": 9529,
+      "quality:missing:duration": 7011,
+      "quality:zero_packets": 4062,
+      "quality:reported_content_gap": 67
+    }
+  }
+}
