@@ -1,6 +1,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect, notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
+import { verifyPermission } from "@/lib/dashboard/verify-permission";
+import { hasPermission } from "@/lib/dashboard/permissions";
 import IncidentDetailsClient from "./IncidentDetailsClient";
 
 export default async function IncidentDetailPage({
@@ -13,6 +15,7 @@ export default async function IncidentDetailPage({
     redirect("/onboarding");
   }
 
+  const context = await verifyPermission("read:incidents");
   const { id } = await params;
 
   // Resolve organisation
@@ -45,11 +48,9 @@ export default async function IncidentDetailPage({
   }
 
   // Fetch users for the assignment dropdown
-  const dbUsers = await prisma.user.findMany({
-    where: { organizationId: org.id },
-  });
-  const organizationUsers = dbUsers.map(u => u.email);
-
+  const members = await prisma.organizationRole.findMany({where:{organizationId:org.id,status:"Active",role:{in:["Admin","Analyst"]}},include:{user:true}});
+  const organizationUsers = members.map(m=>m.user.email);
+  const link = await prisma.flowEscalation.findFirst({where:{incidentId:id,organizationId:org.id},include:{flow:true,review:true}});
   // Fetch current user details
   const user = await currentUser();
   const email = user?.emailAddresses?.[0]?.emailAddress || "Analyst";
@@ -89,6 +90,8 @@ export default async function IncidentDetailPage({
       }}
       organizationUsers={organizationUsers}
       currentUserEmail={email}
+      canWrite={hasPermission(context.role,"write:incidents")}
+      evidenceLink={link ? {flowId:link.flowId,traceId:link.flow.traceId,evidenceHash:link.evidenceHash,reviewId:link.reviewId,revision:link.review.revision,isSimulated:link.flow.isSimulated} : null}
     />
   );
 }

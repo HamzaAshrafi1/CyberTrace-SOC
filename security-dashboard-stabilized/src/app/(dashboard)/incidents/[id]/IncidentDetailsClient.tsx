@@ -61,12 +61,15 @@ interface IncidentDetailsClientProps {
   incident: IncidentDetails;
   organizationUsers: string[];
   currentUserEmail: string;
+  canWrite: boolean;
+  evidenceLink: {flowId:string;traceId:string;evidenceHash:string;reviewId:string;revision:number;isSimulated:boolean} | null;
 }
 
 export default function IncidentDetailsClient({
   incident,
   organizationUsers,
   currentUserEmail,
+  canWrite, evidenceLink,
 }: IncidentDetailsClientProps) {
   const [commentContent, setCommentContent] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -92,10 +95,12 @@ export default function IncidentDetailsClient({
   const handleWorkflowTransition = async (status: string, assignee?: string) => {
     startTransition(async () => {
       try {
-        await updateIncidentWorkflowAction(incident.id, status, assignee);
+        const reason = window.prompt("Explain this assignment or status change (10–2000 characters):");
+        if (reason === null) return;
+        await updateIncidentWorkflowAction(incident.id, status, assignee, incident.updatedAt, reason);
       } catch (err) {
         console.error("Workflow update failed:", err);
-        alert("Failed to update incident state.");
+        alert(err instanceof Error ? err.message : "Failed to update incident state.");
       }
     });
   };
@@ -117,7 +122,7 @@ export default function IncidentDetailsClient({
     window.print();
   };
 
-  const analystList = Array.from(new Set(["Unassigned", "analyst@alphasec.com", ...organizationUsers]));
+  const analystList = Array.from(new Set(["Unassigned", ...organizationUsers]));
 
   // Visual helper mapping activity log types to descriptive icons
   const getActivityIcon = (type: string) => {
@@ -196,6 +201,14 @@ export default function IncidentDetailsClient({
         </div>
       </div>
 
+      {evidenceLink && <section className="rounded border border-white/10 p-4 space-y-2 text-xs break-all">
+        <h2 className="font-semibold">Linked flow evidence {evidenceLink.isSimulated ? "[SYNTHETIC]" : ""}</h2>
+        <p>Flow: {evidenceLink.flowId} · Trace: {evidenceLink.traceId}</p>
+        <p>Review: {evidenceLink.reviewId} · Revision {evidenceLink.revision}</p>
+        <p>Evidence SHA-256: {evidenceLink.evidenceHash}</p>
+        <Link className="underline" href="/flows">Open Flow Collection</Link>
+        <p>Model observations remain provisional. Status changes record analyst decisions and do not execute containment actions.</p>
+      </section>}
       {/* Main Print Wrapper */}
       <div id="incident-print-area" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
@@ -247,9 +260,9 @@ export default function IncidentDetailsClient({
               <div className="mb-6 grid grid-cols-4 gap-2 font-mono text-[9px] no-print">
                 {[
                   { status: "open", label: "1. OPEN STATE", color: "cyber-red" },
-                  { status: "investigating", label: "2. TRIAGE & INVESTIGATING", color: "cyber-orange" },
-                  { status: "contained", label: "3. ISOLATED & CONTAINED", color: "cyber-blue" },
-                  { status: "resolved", label: "4. VERIFIED & RESOLVED", color: "cyber-green" }
+                  { status: "investigating", label: "2. INVESTIGATING", color: "cyber-orange" },
+                  { status: "contained", label: "3. ANALYST CONTAINED", color: "cyber-blue" },
+                  { status: "resolved", label: "4. ANALYST RESOLVED", color: "cyber-green" }
                 ].map((step, idx) => {
                   const statuses = ["open", "investigating", "contained", "resolved"];
                   const currentIdx = statuses.indexOf(incident.status.toLowerCase());
@@ -301,7 +314,7 @@ export default function IncidentDetailsClient({
                 <div className="p-2.5 rounded bg-background/50 border border-white/5 flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-cyber-blue" />
                   <div>
-                    <p className="text-[9px] text-muted-foreground uppercase font-mono">Discovered Time (UTC)</p>
+                    <p className="text-[9px] text-muted-foreground uppercase font-mono">Record Created (UTC)</p>
                     <p className="font-semibold mt-0.5">{new Date(incident.createdAt).toUTCString()}</p>
                   </div>
                 </div>
@@ -321,7 +334,7 @@ export default function IncidentDetailsClient({
                   <Button 
                     variant="outline" 
                     size="sm"
-                    disabled={isPending}
+                    disabled={isPending || !canWrite}
                     onClick={() => handleWorkflowTransition("open")}
                     className={`text-xs h-8.5 border-white/5 ${incident.status === "open" ? "bg-cyber-red/10 border-cyber-red/30 text-cyber-red" : "hover:bg-secondary/40"}`}
                   >
@@ -330,7 +343,7 @@ export default function IncidentDetailsClient({
                   <Button 
                     variant="outline" 
                     size="sm"
-                    disabled={isPending}
+                    disabled={isPending || !canWrite}
                     onClick={() => handleWorkflowTransition("investigating")}
                     className={`text-xs h-8.5 border-white/5 ${incident.status === "investigating" ? "bg-cyber-orange/10 border-cyber-orange/30 text-cyber-orange" : "hover:bg-secondary/40"}`}
                   >
@@ -339,7 +352,7 @@ export default function IncidentDetailsClient({
                   <Button 
                     variant="outline" 
                     size="sm"
-                    disabled={isPending}
+                    disabled={isPending || !canWrite}
                     onClick={() => handleWorkflowTransition("contained")}
                     className={`text-xs h-8.5 border-white/5 ${incident.status === "contained" ? "bg-cyber-blue/10 border-cyber-blue/30 text-cyber-blue" : "hover:bg-secondary/40"}`}
                   >
@@ -348,7 +361,7 @@ export default function IncidentDetailsClient({
                   <Button 
                     variant="outline" 
                     size="sm"
-                    disabled={isPending}
+                    disabled={isPending || !canWrite}
                     onClick={() => handleWorkflowTransition("resolved")}
                     className={`text-xs h-8.5 border-white/5 ${incident.status === "resolved" ? "bg-cyber-green/10 border-cyber-green/30 text-cyber-green" : "hover:bg-secondary/40"}`}
                   >
@@ -524,7 +537,7 @@ export default function IncidentDetailsClient({
                   placeholder="Post comment details..."
                   value={commentContent}
                   onChange={(e) => setCommentContent(e.target.value)}
-                  disabled={isPending}
+                  disabled={isPending || !canWrite}
                   className="flex-1 bg-background/80 border border-white/5 text-foreground text-xs rounded-lg px-3 h-8.5 focus:outline-none focus:ring-1 focus:ring-cyber-blue font-mono"
                 />
                 <Button 

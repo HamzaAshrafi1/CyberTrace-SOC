@@ -1,0 +1,6 @@
+{
+  "src/app/(dashboard)/incidents/[id]/actions.ts": "2684e67c7edbef43aee9d7b14353a7fa165cad8bfefa23767c067e72494cb2e1",
+  "src/app/(dashboard)/incidents/[id]/page.tsx": "b92f5ff0f7313704b90b266b2b67b6d73b3062d600bb96f147959d3288d2c122",
+  "src/app/(dashboard)/incidents/[id]/IncidentDetailsClient.tsx": "f8480b52844675ab6dce602116702a58fbfb2325bfaedbcce696e08a0902cb3d",
+  "src/app/(dashboard)/incidents/actions.ts": "c019ba703ea006a45e5fa59a1bd09eb0393305aad76a7e2f5e301257d78fac1e"
+}

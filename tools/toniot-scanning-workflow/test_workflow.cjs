@@ -1,0 +1,23 @@
+const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('node:assert/strict');
+const root=process.argv[2],ts=require(path.join(root,'node_modules/typescript'));
+const src=fs.readFileSync(path.join(root,'src/app/(dashboard)/incidents/[id]/actions.ts'),'utf8');
+let allowed=true,found=true,member=true,failAudit=false,state={id:'inc',status:'open',assignedTo:'Unassigned',updatedAt:new Date('2026-10-14T00:00:00Z')},writes=[];
+const prisma={$transaction:async fn=>{let temp=structuredClone(state),staged=[];const create=kind=>async({data})=>{staged.push({kind,data});return data};
+ const tx={$queryRawUnsafe:async(sql,org,id)=>{assert.equal(org,'org');assert.equal(id,'inc');return[]},incident:{findFirst:async({where})=>{assert.equal(where.organizationId,'org');return found?temp:null},update:async({data})=>{temp={...temp,...data,updatedAt:new Date(temp.updatedAt.getTime()+1)};return temp}},organizationRole:{findFirst:async({where})=>{assert.equal(where.organizationId,'org');return member?{}:null}},incidentComment:{create:create('comment')},incidentActivityLog:{create:create('activity')},auditLog:{create:async v=>{if(failAudit)throw Error('audit failure');return create('audit')(v)}}};let result=await fn(tx);state=temp;writes.push(...staged);return result;}};
+const sandbox={exports:{},console,require:n=>{if(n==='@/lib/prisma')return{default:prisma};if(n==='@/lib/dashboard/verify-permission')return{verifyPermission:async()=>{if(!allowed)throw Error('forbidden');return{org:{id:'org'},user:{id:'u',email:'analyst@test'}}}};if(n==='next/cache')return{revalidatePath:()=>{}};return{};}};
+vm.runInNewContext(ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,sandbox);
+const a=sandbox.exports.updateIncidentWorkflowAction,n=sandbox.exports.addIncidentCommentAction;
+const update=(s,assignee)=>a('inc',s,assignee,state.updatedAt.toISOString(),'Synthetic investigation workflow test.');
+(async()=>{
+ allowed=false;await assert.rejects(update('investigating','analyst@test'));allowed=true;
+ await assert.rejects(update('invalid'));await assert.rejects(update('resolved','analyst@test'));await assert.rejects(update('investigating'));
+ member=false;await assert.rejects(update('open','other@test'));member=true;
+ found=false;await assert.rejects(update('open','analyst@test'));found=true;
+ await assert.rejects(a('inc','open','analyst@test','2020-01-01T00:00:00Z','Valid investigation explanation.'));
+ assert.equal(writes.length,0);
+ await update('open','analyst@test');await update('investigating');await n('inc','Synthetic test evidence inspected; not a real incident.');
+ failAudit=true;const before=JSON.stringify(state),count=writes.length;await assert.rejects(update('resolved'));assert.equal(JSON.stringify(state),before);assert.equal(writes.length,count);failAudit=false;
+ await update('resolved');assert.equal(state.status,'resolved');await assert.rejects(update('contained'));await update('investigating');
+ await assert.rejects(n('inc','short'));
+ console.log('Passed: permissions, tenant-scoped queries, active assignment, legal transitions, reason validation, stale updates, note history, reopen, and atomic audit failure (mock transactions).');
+})().catch(e=>{console.error(e);process.exit(1)});

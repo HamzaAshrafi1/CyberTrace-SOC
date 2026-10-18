@@ -1,108 +1,52 @@
 "use server";
-
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { currentUser } from "@clerk/nextjs/server";
 import { verifyPermission } from "@/lib/dashboard/verify-permission";
 import { writeAuditLog } from "@/lib/dashboard/audit";
 import { serviceHeaders } from "@/lib/dashboard/service-auth";
 import { AEGIS_SERVICE_URL } from "@/lib/dashboard/config";
-import { sanitizeString } from "@/lib/dashboard/security";
 
-export async function addIncidentCommentAction(incidentId: string, content: string) {
-  const { org } = await verifyPermission("write:incidents");
-  const sanitizedContent = sanitizeString(content);
-
-  const incident = await prisma.incident.findFirst({
-    where: { id: incidentId, organizationId: org.id },
-  });
-  if (!incident) throw new Error("Incident not found or unauthorized");
-
-  const user = await currentUser();
-  const userName = user?.emailAddresses?.[0]?.emailAddress || "Analyst";
-
-  await prisma.incidentComment.create({
-    data: {
-      organizationId: org.id,
-      incidentId,
-      userName,
-      content: sanitizedContent,
-    },
-  });
-
-  await writeAuditLog("Incident Comment Added", { id: incidentId });
-
-  revalidatePath(`/incidents/${incidentId}`);
-  revalidatePath("/incidents");
+function reasonText(value: string) {
+ if (typeof value !== "string" || value.trim().length < 10 || value.trim().length > 2000) throw new Error("Provide an investigation reason between 10 and 2000 characters.");
+ return value.trim();
 }
-
-export async function updateIncidentWorkflowAction(
-  incidentId: string,
-  status: string,
-  assignee?: string
-) {
-  const { org } = await verifyPermission("write:incidents");
-
-  const incident = await prisma.incident.findFirst({
-    where: { id: incidentId, organizationId: org.id },
-  });
-  if (!incident) throw new Error("Incident not found or unauthorized");
-
-  // Determine transitions to write activity log
-  const statusChanged = status !== incident.status;
-  const assigneeChanged = assignee !== undefined && assignee !== incident.assignedTo;
-
-  await prisma.$transaction(async (tx) => {
-    // 1. Update Incident
-    await tx.incident.update({
-      where: { id: incidentId },
-      data: {
-        status,
-        ...(assignee !== undefined ? { assignedTo: assignee } : {}),
-      },
-    });
-
-    // 2. Log Status change
-    if (statusChanged) {
-      await tx.incidentActivityLog.create({
-        data: {
-          organizationId: org.id,
-          incidentId,
-          activityType: "status_change",
-          description: `Status changed from '${incident.status}' to '${status}'.`,
-        },
-      });
-
-      if (status === "resolved") {
-        await tx.incidentActivityLog.create({
-          data: {
-            organizationId: org.id,
-            incidentId,
-            activityType: "resolved",
-            description: "Incident resolved and archived.",
-          },
-        });
-      }
-    }
-
-    // 3. Log Assignee change
-    if (assigneeChanged) {
-      await tx.incidentActivityLog.create({
-        data: {
-          organizationId: org.id,
-          incidentId,
-          activityType: "assigned",
-          description: `Incident assigned to '${assignee}'.`,
-        },
-      });
-    }
-  });
-
-  await writeAuditLog("Incident Status Change", { id: incidentId, status, assignee });
-
-  revalidatePath(`/incidents/${incidentId}`);
-  revalidatePath("/incidents");
-  revalidatePath("/overview");
+function refresh(id: string) {
+ revalidatePath(`/incidents/${id}`); revalidatePath("/incidents"); revalidatePath("/overview");
+}
+export async function addIncidentCommentAction(incidentId: string, content: string) {
+ const {org,user}=await verifyPermission("write:incidents"); const note=reasonText(content);
+ await prisma.$transaction(async tx=>{
+  await tx.$queryRawUnsafe("SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))) AS lock_request",org.id,incidentId);
+  const incident=await tx.incident.findFirst({where:{id:incidentId,organizationId:org.id}});
+  if(!incident) throw new Error("Incident not found or unauthorized.");
+  await tx.incidentComment.create({data:{incidentId,organizationId:org.id,userName:user.email,content:note}});
+  await tx.incidentActivityLog.create({data:{incidentId,organizationId:org.id,activityType:"note_added",description:`Investigation note added by ${user.email}.`}});
+  await tx.auditLog.create({data:{organizationId:org.id,userId:user.id,userEmail:user.email,action:"Incident Comment Added",metadata:{incidentId}}});
+ }); refresh(incidentId);
+}
+export async function updateIncidentWorkflowAction(incidentId: string,status: string,assignee?: string,expectedUpdatedAt?: string,reason?: string) {
+ const {org,user}=await verifyPermission("write:incidents");
+ const allowed: Record<string,string[]>={open:["investigating"],investigating:["contained","resolved"],contained:["investigating","resolved"],resolved:["investigating"]};
+ if(!Object.hasOwn(allowed,status)) throw new Error("Invalid incident status.");
+ if(!expectedUpdatedAt || !Number.isFinite(Date.parse(expectedUpdatedAt))) throw new Error("Refresh before updating this incident.");
+ const explanation=reasonText(reason || "");
+ await prisma.$transaction(async tx=>{
+  await tx.$queryRawUnsafe("SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))) AS lock_request",org.id,incidentId);
+  const incident=await tx.incident.findFirst({where:{id:incidentId,organizationId:org.id}});
+  if(!incident) throw new Error("Incident not found or unauthorized.");
+  if(incident.updatedAt.toISOString()!==expectedUpdatedAt) throw new Error("Another update was saved. Refresh before updating again.");
+  if(status!==incident.status && !(allowed[incident.status] || []).includes(status)) throw new Error("Start investigation before advancing; reopen a resolved incident to investigate.");
+  if(assignee!==undefined && assignee!=="Unassigned") {
+   const member=await tx.organizationRole.findFirst({where:{organizationId:org.id,status:"Active",role:{in:["Admin","Analyst"]},user:{email:assignee}}});
+   if(!member) throw new Error("Choose an active analyst from this organization.");
+  }
+  const assignedTo=assignee===undefined?incident.assignedTo:assignee;
+  if(status!=="open" && assignedTo==="Unassigned") throw new Error("Assign an analyst before advancing this incident.");
+  if(status===incident.status && assignedTo===incident.assignedTo) return;
+  await tx.incident.update({where:{id:incidentId},data:{status,assignedTo}});
+  await tx.incidentActivityLog.create({data:{organizationId:org.id,incidentId,activityType:status!==incident.status?(status==="resolved"?"resolved":"status_change"):"assigned",description:`${user.email}: ${incident.status} -> ${status}; assignee ${incident.assignedTo} -> ${assignedTo}. Reason: ${explanation}`}});
+  await tx.auditLog.create({data:{organizationId:org.id,userId:user.id,userEmail:user.email,action:"Incident Workflow Updated",metadata:{incidentId,previousStatus:incident.status,status,assignedTo,reason:explanation}}});
+ }); refresh(incidentId);
 }
 
 export async function generateIncidentAiSummaryAction(incidentId: string) {
@@ -143,26 +87,7 @@ export async function generateIncidentAiSummaryAction(incidentId: string) {
   } catch (error) {
     console.warn("Fallback to local heuristic AI incident summary:", error);
 
-    const ips = Array.from(new Set(incident.threatEvents.map(t => t.sourceIp)));
-    const targets = Array.from(new Set(incident.threatEvents.map(t => t.target)));
-
-    summaryText = `### [Local AI Incident Audit Summary: ${incident.id}]
-
-**1. Executive Summary:**
-This incident aggregates a group of ${incident.threatEvents.length} correlated security threat alerts logged in the Postgres events repository. Attack vectors target gateway endpoints, indicating vulnerability scanning activity.
-
-**2. Root Cause:**
-- **Trigger Signature:** ${incident.title}
-- **Impacted Systems:** ${targets.join(", ") || "Unknown Gateway"}
-- **Attacking Hosts:** ${ips.join(", ") || "Unknown IP"}
-
-**3. Impact Analysis:**
-Medium to High. Attacker attempted input manipulation scans targeting Parameter routes. While target resources remain online, active query manipulation probes expose key database endpoints.
-
-**4. Remediation Recommendations:**
-1. Block IP address blocks for: \`${ips.join("`, `") || "N/A"}\` at the border firewall level.
-2. Review target node input forms for parameterized query validation.
-3. Schedule automatic compliance checker reports on target schemas.`;
+    throw new Error("AI summary unavailable. Review the stored evidence and add an investigation note.");
   }
 
   // Persist the summary
